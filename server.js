@@ -10,110 +10,117 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-// Path to save data
+// Path to accounts.json
 const dataPath = path.join(__dirname, 'accounts.json');
 
-// Initialize data file if it doesn't exist
+// Initialize accounts.json if not present
 if (!fs.existsSync(dataPath)) {
-    fs.writeFileSync(dataPath, JSON.stringify([]));
+  fs.writeFileSync(dataPath, JSON.stringify([]));
 }
 
-// Read data
+// Helper: Read all accounts
 function readAccounts() {
-    try {
-        const data = fs.readFileSync(dataPath, 'utf8');
-        return JSON.parse(data);
-    } catch (error) {
-        console.error('❌ Error reading accounts:', error);
-        return [];
-    }
+  try {
+    const data = fs.readFileSync(dataPath, 'utf8');
+    return JSON.parse(data);
+  } catch (err) {
+    console.error('❌ Error reading accounts:', err);
+    return [];
+  }
 }
 
-// Write data
+// Helper: Write all accounts
 function writeAccounts(accounts) {
-    try {
-        fs.writeFileSync(dataPath, JSON.stringify(accounts, null, 2));
-        return true;
-    } catch (error) {
-        console.error('❌ Error writing accounts:', error);
-        return false;
-    }
+  try {
+    fs.writeFileSync(dataPath, JSON.stringify(accounts, null, 2));
+    return true;
+  } catch (err) {
+    console.error('❌ Error writing accounts:', err);
+    return false;
+  }
 }
 
-// 🔹 GET: View all accounts
-app.get('/api/accounts', (req, res) => {
-    const accounts = readAccounts();
-    res.json(accounts);
-});
-
-// 🔹 POST: Update or add account via executor
+// ✅ MAIN: POST /api/accounts — from Roblox executor
 app.post('/api/accounts', (req, res) => {
+  try {
     const { userId, username, kills, deaths } = req.body;
 
-    if (!username || userId == nil) {
-        return res.status(400).json({ error: 'Missing username or userId' });
+    // ✅ FIXED: removed Lua "nil" — JS uses undefined/null
+    if (!username || !userId) {
+      return res.status(400).json({ error: 'Missing username or userId' });
     }
 
-    const accounts = readAccounts();
     const now = new Date().toISOString();
+    const accounts = readAccounts();
 
     const newEntry = {
-        userId,
-        username,
-        kills: kills || 0,
-        deaths: deaths || 0,
-        updated: now
+      userId,
+      username,
+      kills: kills || 0,
+      deaths: deaths || 0,
+      updated: now
     };
 
     accounts.push(newEntry);
 
     if (writeAccounts(accounts)) {
-        res.json({ success: true, message: 'Stat saved', data: newEntry });
+      console.log('📥 Saved stat:', newEntry);
+      return res.json({ success: true, message: 'Stat saved', data: newEntry });
     } else {
-        res.status(500).json({ error: 'Failed to save stat' });
+      return res.status(500).json({ error: 'Failed to save stat' });
     }
+  } catch (err) {
+    console.error('❌ Exception in POST /api/accounts:', err);
+    return res.status(500).json({ error: 'Internal Server Error', details: err.message });
+  }
 });
 
-// 🔹 POST: Update existing account (your original route)
+// 🔄 Your original route: update account
 app.post('/api/update', (req, res) => {
-    const { username, balance, status, game, server } = req.body;
+  const { username, balance, status, game, server } = req.body;
 
-    if (!username) {
-        return res.status(400).json({ error: 'Username is required' });
-    }
+  if (!username) {
+    return res.status(400).json({ error: 'Username is required' });
+  }
 
-    const accounts = readAccounts();
-    const index = accounts.findIndex(acc => acc.username === username);
-    const now = new Date().toISOString();
+  const accounts = readAccounts();
+  const now = new Date().toISOString();
+  const index = accounts.findIndex(acc => acc.username === username);
 
-    const updated = {
-        username,
-        balance: balance || 0,
-        status: status || 'Offline',
-        game: game || 'Unknown',
-        server: server || 'N/A',
-        lastUpdated: now
-    };
+  const updated = {
+    username,
+    balance: balance || 0,
+    status: status || 'Offline',
+    game: game || 'Unknown',
+    server: server || 'N/A',
+    lastUpdated: now
+  };
 
-    if (index >= 0) {
-        accounts[index] = updated;
-    } else {
-        accounts.push(updated);
-    }
+  if (index >= 0) {
+    accounts[index] = updated;
+  } else {
+    accounts.push(updated);
+  }
 
-    if (writeAccounts(accounts)) {
-        res.json({ success: true, message: 'Account updated' });
-    } else {
-        res.status(500).json({ error: 'Failed to update account' });
-    }
+  if (writeAccounts(accounts)) {
+    return res.json({ success: true, message: 'Account updated', data: updated });
+  } else {
+    return res.status(500).json({ error: 'Failed to update account' });
+  }
 });
 
-// Homepage test
+// 📄 GET /api/accounts — view saved data
+app.get('/api/accounts', (req, res) => {
+  const accounts = readAccounts();
+  res.json(accounts);
+});
+
+// 🏠 GET / — test homepage
 app.get('/', (req, res) => {
-    res.send('✅ TrackStat API is running');
+  res.send('✅ TrackStat API is running');
 });
 
 // Start the server
 app.listen(PORT, () => {
-    console.log(`✅ TrackStat API running on port ${PORT}`);
+  console.log(`✅ TrackStat API running on port ${PORT}`);
 });
